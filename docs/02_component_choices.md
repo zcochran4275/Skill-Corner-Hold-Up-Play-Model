@@ -7,13 +7,13 @@ Decisions made on 28 Oct 2026, after researching open-source options. These over
 | Area | Decision | Replaces in spec |
 | --- | --- | --- |
 | Training data | SkillCorner open data only for now; revisit pooling if xR stays weak | — |
-| Pressure | Build both pressing intensity and the pressure oval; keep the one with better cross-validated xR log loss and stronger rank correlation with SkillCorner pressure labels | "Pressure model (planned)", "Closing speed (planned)" |
+| Pressure | Built both (28 Oct 2026), re-evaluated 29 Oct after the engaged gate was dropped. The pressure oval beats pressing intensity on SkillCorner label correlation (0.72 vs 0.55) and cross-validated fit, but plain distances (defenders within 5 m, nearest defender) do better than either. Feed distance features and the oval into the xR model and let regularisation decide; keep pressing intensity in the code as an option. Its parameters are unstable (0.19-0.63) and broadcast velocities are noisy. | "Pressure model (planned)", "Closing speed (planned)" |
 | Value | SkillCorner EPV for headline metrics, plus an open location-based EPV grid as a robustness check | "Which EPV model" open question |
-| Support options | Geometric lanes (spec) + "teammate is free" from the pressing-intensity matrix + a physics-based expected-pass-completion threshold (test 60%, 70%, 80%) | Open options feature |
+| Support options | Geometric lanes (spec) + "teammate is free" from the pressing-intensity matrix + a physics-based expected-pass-completion threshold (test 60%, 70%, 80%) | Open options feature | Built 29 Oct 2026: all three views computed; options at 60%+ completion and the sum of expected completions help most, so the xR model gets those plus open lanes and lets regularisation decide. The pass-completion constants (14 m/s, 0.5 s, 7 m/s) are hand-set and sensitive.
 | xPass model | Physics-based (Spearman-style interception model), no training | — |
-| Hold-up scope | Open play only; any advanced forward, not only CF; counted whenever he gets the first touch, even if he never controls it; back to goal from the spec gates only | "centre forward" in linking step 1 |
+| Hold-up scope | Any advanced forward (CF/LF/RF), not only CF; restarts (goal kicks, throw-ins, free kicks, corners) included and labelled; a pass won by the defender first counts as a failed hold-up; new gate: the ball must travel towards goal (within 45 degrees), not arrive from the side; the attacking-half gate is optional and off by default (a forward only has to be on the back line). Changed 28 Oct 2026 from "open play only". | "centre forward" in linking step 1 |
 | Last line | Back-line algorithm with a band (below) | Deepest outfield defender, 2.5 m |
-| Defender engaged | 3.5 m goal-side for the first build; test a pressure-model threshold later | — |
+| Defender engaged | Not a detection rule (29 Oct 2026): being posted on the back line at release is enough, and how well he gets away from defenders is assessed afterwards from separation and pressure features. The old gate (a defender behind him within 3.5 m, or reaching him within 1 s from tracking velocity) stays in the code behind `require_engaged`, off by default. | Spec gate 2 (defender engaged) |
 
 ## Back-line algorithm
 
@@ -28,9 +28,9 @@ Sensitivity check: ±10 m is much wider than the spec's 2.5 m and will admit rec
 
 ## First-touch rule
 
-- Include the ball when he gets the first touch; exclude it when a defender touches it first.
+- A pass where the defender touches it first is kept as a failed hold-up (outcome `defender_first`).
 - A scuffed touch or flick that is lost counts as lost.
-- Check whether SkillCorner logs these as player possessions. If not, detect first touch from tracking (ball within reach of him before any defender).
+- Resolved: SkillCorner logs the opponent interception, so the failure is found from the unsuccessful pass targeting him plus the next opponent `pass_interception`. Scuffed touches he still controls are not separately detected.
 
 ## Options considered
 
@@ -57,7 +57,7 @@ Labels stay as validation only.
 
 | Dataset | Notes |
 | --- | --- |
-| SkillCorner open data | A-League 2024/25, 10 fps, dynamic events with EPV and pressure labels; MIT. README lists 10 matches; the spec says 20 (check) |
+| SkillCorner open data | A-League 2024/25, 10 fps, dynamic events with EPV and pressure labels; MIT. The repo README says 10 matches but the folder holds 20 (confirmed 28 Oct 2026) |
 | Gradient Sports (PFF FC) World Cup 2022 | 64 matches, tracking + events; request form; terms not stated |
 | IDSSE / DFL | 7 Bundesliga matches, 25 fps, CC-BY 4.0 |
 
