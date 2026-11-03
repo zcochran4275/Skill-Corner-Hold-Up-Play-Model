@@ -63,7 +63,7 @@ def cross_validated_regression(X, y, groups, other, n_splits=10, repeats=5):
     return at_x, at_other
 
 
-def over_expected(data, outcomes, name, production_classifier=False, n_splits=10, repeats=5):
+def over_expected(data, outcomes, name, production_classifier=False, n_splits=10, repeats=5, context=None):
     """Over-expected scores for one outcome. ``data``: model features (with release columns, epv_before, match_id,
     event_id), aligned row by row with ``outcomes``. Returns a table with event_id, outcome, expected at contact and
     at release, ``oe_release`` (outcome - expected at release, centred on its mean) and ``oe_contact`` (outcome -
@@ -71,13 +71,19 @@ def over_expected(data, outcomes, name, production_classifier=False, n_splits=10
 
     ``production_classifier=True`` uses the pipeline's retention model (logistic + trees on the 13 features) for the
     binary outcome; otherwise the same ridge + trees regression is used for every outcome.
+
+    ``context``: extra columns (same rows as ``data``, for example team indicators and the striker's pitch position)
+    added to the situation at both moments, so the expectation also accounts for where and for whom the hold-up
+    happens. Strikers who play for one team are then partly absorbed by the team terms.
     """
     y = outcomes[name].to_numpy(float)
     keep = ~np.isnan(y)
     d = data[keep].reset_index(drop=True)
+    extra = context[keep].reset_index(drop=True) if context is not None else pd.DataFrame(index=d.index)
     yk, groups = y[keep], d.match_id.to_numpy()
     if production_classifier:
-        contact_x, release_x = d[model.FEATURES], model.release_state(d)
+        contact_x = pd.concat([d[model.FEATURES], extra], axis=1)
+        release_x = pd.concat([model.release_state(d), extra], axis=1)
         l_c, l_r = model.cross_validated_predict(contact_x, yk.astype(int), groups, model.make_logit, release_x, n_splits, repeats)
         t_c, t_r = model.cross_validated_predict(contact_x, yk.astype(int), groups, model.make_trees, release_x, n_splits, repeats)
         at_contact, at_release = (l_c + t_c) / 2, (l_r + t_r) / 2
@@ -85,7 +91,8 @@ def over_expected(data, outcomes, name, production_classifier=False, n_splits=10
         columns = model.EPV_FEATURES
         release = model.release_state(d)
         release["epv_before"] = d.epv_before
-        at_contact, at_release = cross_validated_regression(d[columns], yk, groups, release[columns], n_splits, repeats)
+        at_contact, at_release = cross_validated_regression(pd.concat([d[columns], extra], axis=1), yk, groups,
+                                                            pd.concat([release[columns], extra], axis=1), n_splits, repeats)
     result = pd.DataFrame({"event_id": d.event_id, "outcome": yk, "expected_contact": at_contact,
                            "expected_release": at_release})
     result["oe_release"] = result.outcome - result.expected_release
